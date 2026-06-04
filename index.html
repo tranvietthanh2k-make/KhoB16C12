@@ -1,0 +1,457 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quản lý kho</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f2f2f2;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    .panel {
+      background: #fff;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.08);
+      margin: 20px 0;
+    }
+
+    .top-image {
+      width: min(100%, 900px);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 4px 14px rgba(0,0,0,.08);
+      margin: 10px auto 20px;
+      display: block;
+    }
+
+    input, button {
+      padding: 10px 12px;
+      margin: 6px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      color: white;
+      background: #2563eb;
+    }
+
+    .btn-green { background: #16a34a; }
+    .btn-red { background: #dc2626; }
+    .btn-yellow { background: #ca8a04; }
+    .btn-gray { background: #4b5563; }
+    .btn-purple { background: #7c3aed; }
+
+    table {
+      width: 100%;
+      margin: auto;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background: #f8fafc;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-weight: bold;
+      min-height: 20px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .toolbar {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📦 Quản lý kho Trung đội 13</h2>
+
+    <img src="sodo.jpg" alt="Sơ đồ kho 3D" class="top-image" />
+
+    <div class="panel">
+      <input id="ten" list="danhSachVatChat" placeholder="Chọn loại vật chất" autocomplete="off">
+      <datalist id="danhSachVatChat"></datalist>
+
+      <input id="sl" type="number" min="1" placeholder="Số lượng">
+      <input id="nguoi" placeholder="Tên người">
+
+      <div class="toolbar">
+        <button class="btn-green" onclick="nhap()">Nhập</button>
+        <button class="btn-red" onclick="xuat()">Xuất</button>
+        <button class="btn-yellow" onclick="muon()">Mượn</button>
+        <button class="btn-gray" onclick="tra()">Trả</button>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn-purple" onclick="xuatExcel()">Xuất Excel</button>
+        <button class="btn-gray" onclick="xoaLichSu()">Xóa lịch sử</button>
+        <button class="btn-gray" onclick="khoiTaoLaiDuLieu()">Khôi tạo lại dữ liệu ban đầu</button>
+      </div>
+
+      <div class="status" id="status"></div>
+      <div class="small">
+        Loại vật chất phải chọn đúng theo danh sách có sẵn để tránh lệch số liệu.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📊 Tồn kho</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Loại vật chất</th>
+              <th>Số lượng còn</th>
+            </tr>
+          </thead>
+          <tbody id="kho"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📜 Lịch sử thao tác</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Loại vật chất</th>
+              <th>Số lượng</th>
+              <th>Hành động</th>
+              <th>Tên người</th>
+              <th>Ngày giờ</th>
+            </tr>
+          </thead>
+          <tbody id="log"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const KHO_KEY = "quanly_kho_b11";
+    const LOG_KEY = "quanly_log_b11";
+    const INIT_KEY = "quanly_kho_initialized_b11";
+
+    const initialKho = [
+      { ten: "Mặt nạ  MV-5", sl: 29 },
+      { ten: "Xẻng BB", sl: 22 },
+      { ten: "Cuốc BB", sl: 9 },
+      { ten: "Lựu đạn", sl: 0 },
+      { ten: "Đạn B41 HL", sl: 0 },
+      { ten: "Cuốc bàn ", sl: 10 },
+      { ten: "Xẻng pháo  ", sl: 10},
+      { ten: "Xà beng ", sl: 3 },
+      { ten: "Thuốn ", sl: 2 },
+      { ten: "Chổi xương ", sl: 6 },
+      { ten: "Chổi đót", sl: 5 },
+      { ten: "Chổi lau nhà", sl: 3 },
+      { ten: "Nước rửa bát", sl: 1 },
+      { ten: "Rựa", sl: 8 },
+      { ten: "Cuốc chim", sl: 6 },
+      { ten: "Cưa tay nhỏ", sl: 5 },
+      { ten: "Gậy hành quân", sl: 20 },
+      { ten: "Bàn chải sắt (nhỏ)", sl: 20 },
+      { ten: "Nẹp quân y ", sl: 30 },
+      { ten: "Xô 5 lít", sl: 0 },
+      { ten: "Chậu to", sl: 0 },
+      { ten: "Chậu nhỏ ", sl: 0 },
+      { ten: "Võng dù  ", sl: 0 },
+      { ten: "Guồng  ", sl: 10 },
+      { ten: "Giá điển thoại TA5TB  ", sl: 10 },
+      { ten: "Bay  ", sl: 5 },
+      { ten: "Cờ Ximaypho  ", sl: 2 }
+    ];
+
+    let kho = [];
+    let log = [];
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.style.color = isError ? "#b91c1c" : "#0f766e";
+    }
+
+    function normalizeText(text) {
+      return String(text || "").trim().toLowerCase();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function save() {
+      localStorage.setItem(KHO_KEY, JSON.stringify(kho));
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+    }
+
+    function load() {
+      const initDone = localStorage.getItem(INIT_KEY);
+
+      if (!initDone) {
+        kho = JSON.parse(JSON.stringify(initialKho));
+        log = [];
+        save();
+        localStorage.setItem(INIT_KEY, "1");
+        return;
+      }
+
+      try {
+        kho = JSON.parse(localStorage.getItem(KHO_KEY) || "[]");
+        log = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+      } catch (e) {
+        kho = JSON.parse(JSON.stringify(initialKho));
+        log = [];
+        save();
+      }
+
+      if (!Array.isArray(kho) || kho.length === 0) {
+        kho = JSON.parse(JSON.stringify(initialKho));
+      }
+      if (!Array.isArray(log)) {
+        log = [];
+      }
+      save();
+    }
+
+    function renderDanhSachVatChat() {
+      const datalist = document.getElementById("danhSachVatChat");
+      datalist.innerHTML = kho
+        .map(item => `<option value="${escapeHtml(item.ten)}"></option>`)
+        .join("");
+    }
+
+    function render() {
+      document.getElementById("kho").innerHTML = kho
+        .map(item => `
+          <tr>
+            <td>${escapeHtml(item.ten)}</td>
+            <td>${Number(item.sl || 0)}</td>
+          </tr>
+        `)
+        .join("");
+
+      document.getElementById("log").innerHTML = log
+        .map(item => `
+          <tr>
+            <td>${escapeHtml(item.ten)}</td>
+            <td>${Number(item.sl || 0)}</td>
+            <td>${escapeHtml(item.action)}</td>
+            <td>${escapeHtml(item.nguoi || "")}</td>
+            <td>${escapeHtml(item.time)}</td>
+          </tr>
+        `)
+        .join("");
+
+      renderDanhSachVatChat();
+    }
+
+    function getInputs() {
+      return {
+        ten: document.getElementById("ten").value.trim(),
+        sl: parseInt(document.getElementById("sl").value, 10),
+        nguoi: document.getElementById("nguoi").value.trim()
+      };
+    }
+
+    function clearInputs() {
+      document.getElementById("ten").value = "";
+      document.getElementById("sl").value = "";
+      document.getElementById("nguoi").value = "";
+    }
+
+    function getItemByName(ten) {
+      return kho.find(item => normalizeText(item.ten) === normalizeText(ten));
+    }
+
+    function validateCommon(ten, sl) {
+      if (!ten) {
+        setStatus("Vui lòng chọn loại vật chất.", true);
+        return false;
+      }
+
+      const item = getItemByName(ten);
+      if (!item) {
+        setStatus("Loại vật chất không hợp lệ. Hãy chọn đúng từ danh sách xổ xuống.", true);
+        return false;
+      }
+
+      if (!Number.isInteger(sl) || sl <= 0) {
+        setStatus("Số lượng phải là số nguyên lớn hơn 0.", true);
+        return false;
+      }
+
+      return true;
+    }
+
+    function addLog(ten, sl, nguoi, action) {
+      log.unshift({
+        ten: ten,
+        sl: sl,
+        action: action,
+        nguoi: nguoi || "",
+        time: new Date().toLocaleString("vi-VN")
+      });
+    }
+
+    function nhap() {
+      const { ten, sl, nguoi } = getInputs();
+      if (!validateCommon(ten, sl)) return;
+
+      const item = getItemByName(ten);
+      item.sl = Number(item.sl || 0) + sl;
+
+      addLog(ten, sl, nguoi, "Nhập");
+      save();
+      render();
+      clearInputs();
+      setStatus("Đã nhập kho thành công.");
+    }
+
+    function xuat() {
+      const { ten, sl, nguoi } = getInputs();
+      if (!validateCommon(ten, sl)) return;
+
+      const item = getItemByName(ten);
+
+      if (Number(item.sl || 0) < sl) {
+        setStatus("Số lượng tồn không đủ để xuất.", true);
+        return;
+      }
+
+      item.sl = Number(item.sl || 0) - sl;
+      addLog(ten, sl, nguoi, "Xuất");
+      save();
+      render();
+      clearInputs();
+      setStatus("Đã xuất kho thành công.");
+    }
+
+    function muon() {
+      const { ten, sl, nguoi } = getInputs();
+      if (!validateCommon(ten, sl)) return;
+
+      if (!nguoi) {
+        setStatus("Vui lòng nhập tên người.", true);
+        return;
+      }
+
+      const item = getItemByName(ten);
+
+      if (Number(item.sl || 0) < sl) {
+        setStatus("Số lượng tồn không đủ để mượn.", true);
+        return;
+      }
+
+      item.sl = Number(item.sl || 0) - sl;
+      addLog(ten, sl, nguoi, "Mượn");
+      save();
+      render();
+      clearInputs();
+      setStatus("Đã ghi nhận mượn vật chất.");
+    }
+
+    function tra() {
+      const { ten, sl, nguoi } = getInputs();
+      if (!validateCommon(ten, sl)) return;
+
+      const item = getItemByName(ten);
+      item.sl = Number(item.sl || 0) + sl;
+
+      addLog(ten, sl, nguoi, "Trả");
+      save();
+      render();
+      clearInputs();
+      setStatus("Đã ghi nhận trả vật chất.");
+    }
+
+    function xoaLichSu() {
+      const ok = confirm("Bạn có chắc muốn xóa toàn bộ lịch sử không?");
+      if (!ok) return;
+
+      log = [];
+      save();
+      render();
+      setStatus("Đã xóa lịch sử.");
+    }
+
+    function khoiTaoLaiDuLieu() {
+      const ok = confirm("Bạn có chắc muốn khôi tạo lại toàn bộ dữ liệu ban đầu không?");
+      if (!ok) return;
+
+      kho = JSON.parse(JSON.stringify(initialKho));
+      log = [];
+      save();
+      render();
+      setStatus("Đã khôi tạo lại dữ liệu ban đầu.");
+    }
+
+    function xuatExcel() {
+      const wb = XLSX.utils.book_new();
+
+      const tonKhoSheet = XLSX.utils.json_to_sheet(
+        kho.map(item => ({
+          "Loại vật chất": item.ten,
+          "Số lượng còn": item.sl
+        }))
+      );
+
+      const lichSuSheet = XLSX.utils.json_to_sheet(
+        log.map(item => ({
+          "Loại vật chất": item.ten,
+          "Số lượng": item.sl,
+          "Hành động": item.action,
+          "Tên người": item.nguoi,
+          "Ngày giờ": item.time
+        }))
+      );
+
+      XLSX.utils.book_append_sheet(wb, tonKhoSheet, "TonKho");
+      XLSX.utils.book_append_sheet(wb, lichSuSheet, "LichSu");
+      XLSX.writeFile(wb, "quanly_kho.xlsx");
+
+      setStatus("Đã xuất file Excel.");
+    }
+
+    load();
+    render();
+  </script>
+</body>
+</html>
